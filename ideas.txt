@@ -1,0 +1,97 @@
+=========
+TICKET
+
+Crear un nuevo ticket de venta
+Agregar productos al ticket
+Aplicar descuentos al ticket
+Seleccionar tipo de pago (efectivo o tarjeta)
+Procesar el pago y finalizar la venta
+Imprimir el ticket
+Realizar devolución de producto
+Buscar un ticket por número o fecha
+Cancelar un ticket en proceso
+Aplicar promociones o cupones al ticket
+
+==============
+PROCESOS
+
+Generar factura a partir de un ticket
+Realizar corte de caja diario
+Generar reporte de ventas por período
+Procesar devoluciones y reembolsos
+Actualizar inventario automáticamente tras una venta
+Generar reporte de productos más vendidos
+Calcular comisiones de vendedores
+Generar reporte de impuestos
+Procesar cierre de mes
+Realizar respaldo de datos
+
+==========
+USUARIOS
+
+Registrar nuevo usuario (admin, vendedor)
+Iniciar sesión
+Cerrar sesión
+Cambiar contraseña (admin)
+Recuperar contraseña olvidada
+Asignar roles y permisos (admin)
+Generar venta (admin y vendedor)
+Hacer devoluciones (admin y vendedor)
+Generar facturas (admin y vendedor)
+Agregar clientes (admin y vendedor)
+Ver historial de ventas propias (vendedor)
+Ver todas las ventas y reportes (admin)
+Enviar corte de venta al cerrar sesión (vendedor)
+Modificar información de perfil (admin)
+Desactivar cuenta de usuario (admin)
+
+=============
+DISTRIBUIDOR
+
+Registrar nuevo distribuidor
+Actualizar información del distribuidor
+Ver historial de pedidos por distribuidor
+Realizar nuevo pedido a distribuidor
+Registrar entrega de pedido
+Generar reporte de compras por distribuidor
+Buscar distribuidor por producto
+Gestionar contratos con distribuidores 
+Registrar devoluciones a distribuidor
+
+=============
+PRODUCTO
+
+Agregar nuevo producto al inventario
+Actualizar información del producto
+Eliminar producto del catálogo
+Buscar producto por código o nombre
+Ajustar stock de producto
+Establecer precio de venta
+Definir precio de compra
+Asignar categoría al producto
+Establecer nivel mínimo de stock para reorden
+Generar código de barras para el producto
+Ver historial de ventas del producto
+Aplicar descuento a producto específico
+Marcar producto como descontinuado
+Registrar producto en promoción
+Asociar producto con distribuidor
+
+=============
+CLIENTE
+
+Registrar nuevo cliente
+Actualizar información del cliente
+Buscar cliente por nombre o ID
+Ver historial de compras del cliente
+Asignar categoría de cliente (regular, VIP, etc.)
+Aplicar descuento especial a cliente
+Registrar preferencias del cliente
+Generar tarjeta de fidelidad
+Ver saldo de puntos de fidelidad
+Enviar promociones personalizadas
+Registrar devoluciones del cliente
+Actualizar método de pago preferido
+Ver facturas del cliente
+Gestionar reclamaciones o quejas
+Dar de baja a un cliente
