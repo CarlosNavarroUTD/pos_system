@@ -1,24 +1,25 @@
 import mysql.connector
 
-def connection():
+def create_connection():
+    config = {
+        'user': 'root',
+        'password': '2014',
+        'host': 'localhost',
+        'database': 'bd_pos',
+        'charset': 'utf8mb4',
+        'collation': 'utf8mb4_general_ci'
+    }
+    
     try:
-        conexion = mysql.connector.connect(
-            host='localhost',
-            user='root',
-            password='2014',
-            database='bd_notas',
-            charset='utf8mb4',
-            collation='utf8mb4_general_ci'
-        )
-        return conexion
+        connection = mysql.connector.connect(**config)
+        cursor = connection.cursor()
+        return cursor, connection
+    except mysql.connector.Error as err:
+        print(f"Error al conectar a la base de datos: {err}")
+        return None, None
 
-
-
-
-
-    except mysql.connector.Error as e:
-        print(f"Error al conectar a MySQL: {e}")
-        return None
-    except Exception as e:
-        print(f"Ocurrió un problema inesperado: {e}")
-        return None
+def close_connection(connection, cursor):
+    if cursor:
+        cursor.close()
+    if connection:
+        connection.close()
