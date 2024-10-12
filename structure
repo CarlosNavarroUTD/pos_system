@@ -70,10 +70,6 @@ cabanas/
 │       ├── templates/
 │       │   └── ventas/
 │       └── static/
-├── api/
-│   ├── __init__.py
-│   ├── urls.py
-│   └── views.py
 ├── templates/
 │   └── base.html
 └── static/
