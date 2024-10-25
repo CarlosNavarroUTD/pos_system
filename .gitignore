@@ -1,0 +1,68 @@
+# Python / Django
+__pycache__/
+*.py[cod]
+*.so
+.Python
+*.sqlite3
+db.sqlite3
+*.log
+*.pot
+.env
+venv/
+ENV/
+env/
+superuser_pass
+
+# React / Node.js
+# Dependencies
+node_modules/
+/frontend/node_modules
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+/frontend/coverage
+
+# Production
+/build
+/frontend/build
+
+# Development
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Django static & media
+/static/
+/media/
+*.pyc
+/backend/static/
+/backend/media/
+
+# Django migrations - uncomment if you want to include migrations in git
+# */migrations/*.py
+# !*/migrations/__init__.py
+
+# Virtual environment
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
