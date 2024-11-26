@@ -1,9 +1,8 @@
-# myproject/settings/development.py
 from .base import *
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
 
 DATABASES = {
     'default': {
@@ -12,3 +11,11 @@ DATABASES = {
     }
 }
 
+# Ya que estás usando Docker, también es buena práctica agregar:
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+# Y para desarrollo, podrías querer esto:
+CORS_ALLOW_ALL_ORIGINS = True  # Solo en desarrollo

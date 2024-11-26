@@ -1,6 +1,6 @@
 FROM python:3.9-slim
 
-WORKDIR /backend
+WORKDIR /app
 
 # Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
@@ -8,16 +8,20 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements primero
+# Copiar requirements e instalar dependencias
 COPY requirements.txt .
-
-# Instalar dependencias de Python
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copiar el resto del código
 COPY . .
 
+# Crear directorio para archivos estáticos y dar permisos
+RUN mkdir -p /app/staticfiles && \
+    chmod -R 755 /app/staticfiles
+
 EXPOSE 8000
 
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# El comando se sobrescribirá en docker-compose.override.yml
+CMD ["gunicorn", "myproject.wsgi:application", "--bind", "0.0.0.0:8000"]
+

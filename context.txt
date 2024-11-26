@@ -1,0 +1,517 @@
+#backend/myproject/urls.py
+from django.contrib import admin
+from django.urls import path, include
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+
+class HealthCheckView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        return Response("OK")
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/usuarios/', include('apps.usuarios.urls')),
+    path('api/ventas/', include('apps.ventas.urls')),
+    path('api/inventario/', include('apps.inventario.urls')),
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('health/', HealthCheckView.as_view(), name='health_check'),
+
+]
+
+# app/usuarios/views.py
+from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .models import Usuario, Persona
+from .serializers import UsuarioSerializer, PersonaSerializer
+
+class IsOwnerOrAdmin(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return obj == request.user or request.user.is_staff
+
+class UsuarioViewSet(viewsets.ModelViewSet):
+    queryset = Usuario.objects.all()
+    serializer_class = UsuarioSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdmin]
+
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return Usuario.objects.all()
+        return Usuario.objects.filter(id_usuario=self.request.user.id_usuario)
+
+    @action(detail=False, methods=['get'])
+    def me(self, request):
+        serializer = self.get_serializer(request.user)
+        return Response(serializer.data)
+
+class PersonaViewSet(viewsets.ModelViewSet):
+    queryset = Persona.objects.all()
+    serializer_class = PersonaSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdmin]
+
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return Persona.objects.all()
+        return Persona.objects.filter(usuario=self.request.user)
+
+
+
+        # apps/inventario/views.py 
+        from django.db.models import Q
+        from django.db import transaction
+        from django.core.exceptions import ValidationError
+        
+        from rest_framework import viewsets, status
+        from rest_framework.decorators import action
+        from rest_framework.response import Response
+        
+        from .models import (
+            Producto,
+            Categoria,
+            MovimientoInventario
+        )
+        from .serializers import (
+            ProductoSerializer,
+            CategoriaSerializer,
+            MovimientoInventarioSerializer
+        )
+        from apps.usuarios.permissions import (
+            EsAdministrador,
+            EsCajero,
+            AccionesInventarioPermission
+        )
+        
+        class ProductoViewSet(viewsets.ModelViewSet):
+            """
+            ViewSet para gestionar productos.
+            Proporciona operaciones CRUD y acciones adicionales para productos.
+            """
+            queryset = Producto.objects.all()
+            serializer_class = ProductoSerializer
+            
+            def get_permissions(self):
+                """
+                Permisos específicos por acción:
+                - Crear/Eliminar/Actualización completa: solo administradores
+                - Ver/Actualización parcial (stock): cajeros y administradores
+                """
+                if self.action in ['create', 'destroy', 'update']:
+                    permission_classes = [EsAdministrador]
+                else:
+                    permission_classes = [AccionesInventarioPermission]
+                return [permission() for permission in permission_classes]
+        
+            def get_queryset(self):
+                """
+                Filtra productos según parámetros de búsqueda
+                """
+                queryset = Producto.objects.all()
+                
+                # Búsqueda por nombre o código
+                busqueda = self.request.query_params.get('buscar', None)
+                if busqueda:
+                    queryset = queryset.filter(
+                        Q(nombre__icontains=busqueda) |
+                        Q(codigo_barras__icontains=busqueda)
+                    )
+                
+                # Filtrar por categoría
+                categoria = self.request.query_params.get('categoria', None)
+                if categoria:
+                    queryset = queryset.filter(categoria=categoria)
+                    
+                # Filtrar por estado
+                estado = self.request.query_params.get('estado', None)
+                if estado:
+                    queryset = queryset.filter(estado=estado)
+        
+                return queryset
+        
+            def perform_update(self, serializer):
+                """
+                Validación adicional para actualizaciones
+                """
+                if self.request.user.tipo_usuario == 'cajero':
+                    # Cajeros solo pueden actualizar el stock
+                    if set(self.request.data.keys()) - {'stock'}:
+                        raise ValidationError(
+                            'Cajeros solo pueden actualizar el stock'
+                        )
+                serializer.save()
+        
+            @action(detail=False, methods=['get'])
+            @transaction.atomic
+            def stock_bajo(self, request):
+                """
+                Lista productos con stock bajo el mínimo
+                """
+                productos = Producto.objects.filter(
+                    stock__lte=models.F('stock_minimo')
+                )
+                serializer = self.get_serializer(productos, many=True)
+                return Response(serializer.data)
+        
+            @action(detail=True, methods=['post'])
+            @transaction.atomic
+            def registrar_movimiento(self, request, pk=None):
+                """
+                Registra un movimiento de inventario para el producto
+                """
+                producto = self.get_object()
+                
+                try:
+                    movimiento = MovimientoInventario.objects.create(
+                        id_producto=producto,
+                        id_usuario=request.user,
+                        tipo_movimiento=request.data.get('tipo_movimiento'),
+                        cantidad=request.data.get('cantidad'),
+                        descripcion=request.data.get('descripcion', ''),
+                        numero_documento=request.data.get('numero_documento')
+                    )
+                    
+                    return Response({
+                        'mensaje': 'Movimiento registrado exitosamente',
+                        'movimiento_id': movimiento.id_movimiento
+                    })
+                    
+                except ValidationError as e:
+                    return Response(
+                        {'error': str(e)},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        
+        class CategoriaViewSet(viewsets.ModelViewSet):
+            """
+            ViewSet para gestionar categorías.
+            Solo administradores pueden crear/modificar/eliminar categorías.
+            """
+            queryset = Categoria.objects.all()
+            serializer_class = CategoriaSerializer
+            permission_classes = [EsAdministrador]
+        
+            def get_permissions(self):
+                """
+                Permite lectura a cajeros, pero solo administradores pueden modificar
+                """
+                if self.action in ['list', 'retrieve']:
+                    permission_classes = [EsCajero]
+                else:
+                    permission_classes = [EsAdministrador]
+                return [permission() for permission in permission_classes]
+        
+        class MovimientoInventarioViewSet(viewsets.ModelViewSet):
+            """
+            ViewSet para gestionar movimientos de inventario.
+            """
+            queryset = MovimientoInventario.objects.all()
+            serializer_class = MovimientoInventarioSerializer
+            permission_classes = [AccionesInventarioPermission]
+        
+            def get_queryset(self):
+                """
+                Filtra movimientos según el rol del usuario
+                """
+                queryset = MovimientoInventario.objects.all()
+                
+                # Filtros por fecha
+                fecha_inicio = self.request.query_params.get('fecha_inicio')
+                fecha_fin = self.request.query_params.get('fecha_fin')
+                if fecha_inicio and fecha_fin:
+                    queryset = queryset.filter(
+                        fecha_movimiento__range=[fecha_inicio, fecha_fin]
+                    )
+                    
+                # Filtro por tipo de movimiento
+                tipo = self.request.query_params.get('tipo')
+                if tipo:
+                    queryset = queryset.filter(tipo_movimiento=tipo)
+                    
+                return queryset
+        
+            def perform_create(self, serializer):
+                serializer.save(id_usuario=self.request.user)
+
+
+
+                # apps/ventas/views.py
+                from django.db.models import Sum, Avg, Q
+                from django.utils import timezone
+                from django.core.exceptions import ValidationError
+                from django.db import transaction
+                
+                from rest_framework import viewsets, status
+                from rest_framework.decorators import action, permission_classes
+                from rest_framework.response import Response
+                from rest_framework.permissions import IsAuthenticated
+                
+                from apps.inventario.models import (
+                    Producto, 
+                    MovimientoInventario,
+                )
+                
+                from .models import (
+                    Cliente,    
+                    Venta,
+                    DetalleVenta,
+                )
+                from .serializers import (
+                    ClienteSerializer,
+                    VentaSerializer,
+                    DetalleVentaSerializer,
+                )
+                from apps.usuarios.permissions import (
+                    EsAdministrador,
+                    EsCajero,
+                    VentasPermission,
+                    ClientePermission,
+                )
+                
+                class ClienteViewSet(viewsets.ModelViewSet):
+                    """
+                    ViewSet para gestionar clientes.
+                    Proporciona operaciones CRUD y acciones adicionales para clientes.
+                    """
+                    queryset = Cliente.objects.all()
+                    serializer_class = ClienteSerializer
+                    permission_classes = [IsAuthenticated, VentasPermission]
+                    
+                    def get_queryset(self):
+                        """
+                        Filtrar ventas basado en permisos de objeto
+                        """
+                        queryset = super().get_queryset()
+                        if self.request.user.tipo_usuario == 'cajero':
+                            return queryset.filter(id_usuario=self.request.user.id)
+                        return queryset
+                
+                
+                    def perform_create(self, serializer):
+                        """
+                        Guarda el usuario que crea el cliente
+                        """
+                        serializer.save(
+                            creado_por=self.request.user,
+                            ultima_modificacion_por=self.request.user
+                        )
+                
+                    def perform_update(self, serializer):
+                        """
+                        Actualiza el usuario que modifica el cliente
+                        """
+                        serializer.save(ultima_modificacion_por=self.request.user)
+                
+                    def partial_update(self, request, *args, **kwargs):
+                        """
+                        Personaliza la actualización parcial para cajeros,
+                        limitando los campos que pueden modificar
+                        """
+                        if request.user.tipo_usuario == 'cajero':
+                            campos_permitidos = {'nombre', 'apellido', 'telefono', 'email'}
+                            datos_filtrados = {
+                                k: v for k, v in request.data.items() 
+                                if k in campos_permitidos
+                            }
+                            request.data.clear()
+                            request.data.update(datos_filtrados)
+                            
+                        return super().partial_update(request, *args, **kwargs)
+                
+                    @action(detail=False, methods=['get'])
+                    def exportar_clientes(self, request):
+                        """
+                        Endpoint para exportar datos de clientes.
+                        Solo accesible por administradores.
+                        """
+                        clientes = self.get_queryset()
+                        serializer = self.get_serializer(clientes, many=True)
+                        
+                        return Response({
+                            'mensaje': 'Exportación exitosa',
+                            'data': serializer.data
+                        })
+                
+                    @action(detail=True, methods=['post'])
+                    @transaction.atomic
+                    def marcar_vip(self, request, pk=None):
+                        """
+                        Marca un cliente como VIP.
+                        Solo administradores pueden realizar esta acción.
+                        """
+                        cliente = self.get_object()
+                        cliente.es_vip = True
+                        cliente.ultima_modificacion_por = request.user
+                        cliente.save()
+                        
+                        return Response({
+                            'mensaje': f'Cliente {cliente.nombre} marcado como VIP',
+                            'fecha_modificacion': cliente.fecha_modificacion
+                        })
+                
+                class VentaViewSet(viewsets.ModelViewSet):
+                    queryset = Venta.objects.all()
+                    serializer_class = VentaSerializer
+                    permission_classes = [IsAuthenticated, VentasPermission]  # Asegurarse que VentasPermission está bien definido
+                    
+                
+                    def get_queryset(self):
+                        """
+                        Filtrar detalles basado en permisos de objeto de la venta
+                        """
+                        queryset = super().get_queryset()
+                        if self.request.user.tipo_usuario == 'cajero':
+                            return queryset.filter(venta__id_usuario=self.request.user.id)
+                        return queryset
+                
+                    @transaction.atomic
+                    def create(self, request, *args, **kwargs):
+                        print("Datos recibidos:", request.data)  # Debug
+                        print("Usuario:", request.user)  # Debug
+                        print("Método:", request.method)  # Debug
+                        
+                        try:
+                            detalles = request.data.get('detalles', [])
+                            self._validar_stock_disponible(detalles)
+                            
+                            data = request.data.copy()
+                            data['id_usuario'] = request.user.id
+                            
+                            serializer = self.get_serializer(data=data)
+                            serializer.is_valid(raise_exception=True)
+                            self.perform_create(serializer)
+                            
+                            venta = serializer.instance
+                            self._procesar_movimientos_inventario(venta, detalles)
+                            
+                            headers = self.get_success_headers(serializer.data)
+                            return Response(
+                                serializer.data, 
+                                status=status.HTTP_201_CREATED, 
+                                headers=headers
+                            )
+                            
+                        except Exception as e:
+                            print("Error en create:", str(e))  # Debug
+                            return Response(
+                                {'error': str(e)},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                
+                    def _validar_stock_disponible(self, detalles):
+                        """
+                        Valida que haya suficiente stock para todos los productos
+                        antes de procesar la venta.
+                        """
+                        product_ids = [detalle['id_producto'] for detalle in detalles]
+                        productos = Producto.objects.filter(id_producto__in=product_ids).select_related('inventario')
+                        for producto in productos:
+                            cantidad_solicitada = next(detalle['cantidad'] for detalle in detalles if detalle['id_producto'] == producto.id_producto)
+                            if producto.stock < cantidad_solicitada:
+                                raise ValidationError(f'Stock insuficiente para {producto.nombre}')
+                
+                
+                    def _procesar_movimientos_inventario(self, venta, detalles):
+                        """
+                        Crea los movimientos de inventario correspondientes
+                        para cada producto en la venta.
+                        """
+                        for detalle in detalles:
+                            producto = Producto.objects.get(id_producto=detalle['id_producto'])
+                            cantidad = detalle['cantidad']
+                            
+                            # Crear movimiento de salida en inventario
+                            MovimientoInventario.objects.create(
+                                id_producto=producto,
+                                id_usuario=self.request.user,
+                                tipo_movimiento=MovimientoInventario.SALIDA,
+                                cantidad=cantidad,
+                                descripcion=f'Venta #{venta.id}',
+                                numero_documento=f'V-{venta.id}'
+                            )
+                
+                    @transaction.atomic
+                    def perform_create(self, serializer):
+                        """
+                        Guarda la venta con el usuario actual
+                        """
+                        serializer.save(
+                            id_usuario=self.request.user.id,
+                            creado_por=self.request.user
+                        )
+                
+                    @action(detail=True, methods=['post'])
+                    @transaction.atomic
+                    def cancelar(self, request, pk=None):
+                        """
+                        Cancela una venta y revierte los movimientos de inventario
+                        """
+                        venta = self.get_object()
+                        motivo = request.data.get('motivo', '')
+                        
+                        try:
+                            # Validar que la venta esté en estado válido para cancelación
+                            if venta.estado != 'completada':
+                                raise ValidationError('Solo se pueden cancelar ventas completadas')
+                                
+                            # Revertir movimientos de inventario
+                            self._revertir_movimientos_inventario(venta)
+                            
+                            # Cancelar la venta
+                            venta.estado = 'cancelada'
+                            venta.motivo_cancelacion = motivo
+                            venta.fecha_cancelacion = timezone.now()
+                            venta.cancelado_por = request.user
+                            venta.save()
+                            
+                            return Response({'status': 'Venta cancelada exitosamente'})
+                            
+                        except ValidationError as e:
+                            return Response(
+                                {'error': str(e)},
+                                status=status.HTTP_400_BAD_REQUEST
+                            )
+                
+                    def _revertir_movimientos_inventario(self, venta):
+                        """
+                        Crea movimientos de entrada para revertir una venta cancelada
+                        """
+                        detalles = DetalleVenta.objects.filter(venta=venta)
+                        
+                        for detalle in detalles:
+                            # Crear movimiento de entrada para revertir la salida
+                            MovimientoInventario.objects.create(
+                                id_producto=detalle.producto,
+                                id_usuario=self.request.user,
+                                tipo_movimiento=MovimientoInventario.ENTRADA,
+                                cantidad=detalle.cantidad,
+                                descripcion=f'Reversión por cancelación de Venta #{venta.id}',
+                                numero_documento=f'RC-{venta.id}'
+                            )
+                
+                class DetalleVentaViewSet(viewsets.ModelViewSet):
+                    """
+                    ViewSet para gestionar detalles de venta.
+                    """
+                    queryset = DetalleVenta.objects.all()
+                    serializer_class = DetalleVentaSerializer
+                    permission_classes = [VentasPermission]
+                    http_method_names = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
+                
+                    def get_queryset(self):
+                        """
+                        Filtra detalles de venta según el rol del usuario
+                        """
+                        queryset = DetalleVenta.objects.all()
+                        if not self.request.user.tipo_usuario == 'administrador':
+                            queryset = queryset.filter(venta__id_usuario=self.request.user.id)
+                        return queryset
+                
+                    def perform_create(self, serializer):
+                        """
+                        Guarda el usuario que crea el detalle de venta
+                        """
+                        serializer.save(creado_por=self.request.user)

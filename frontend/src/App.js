@@ -1,43 +1,55 @@
-// frontend/src/App.js
+// src/App.js
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
-import LogInScreen from './components/auth/LogInScreen';
-import ProtectedRoute from './components/auth/ProtectedRoute';
-import Layout from './components/layout/Layout';
-import NuevaVenta from './components/ventas/NuevaVenta';
-import ListaVentas from './components/ventas/ListaVentas';
-import ListaProductos from './components/inventario/ListaProductos';
-import ListaClientes from './components/clientes/ListaClientes';
-import Dashboard from './components/dashboard/Dashboard';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './services/auth/AuthContext';
+import AdminLayout from './layouts/AdminLayout';
+import PublicLayout from './layouts/PublicLayout';
+import PrivateRoute from './services/auth/PrivateRoute';
 
-const App = () => {
+// Admin Pages
+import Dashboard from './pages/admin/dashboard/Dashboard';
+import ListaVentas from './pages/admin/ventas/ListaVentas';
+import NuevaVenta from './pages/admin/ventas/NuevaVenta';
+import ListaProductos from './pages/admin/inventario/ListaProductos';
+import ListaClientes from './pages/admin/clientes/ListaClientes';
+
+// Public Pages
+import LoginScreen from './pages/public/auth/LoginScreen';
+import HomePage from './pages/public/website/HomePage';
+
+function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<LogInScreen />} />
-        <Route 
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }
-        >
-          {/* Rutas anidadas dentro del Layout */}
-          <Route index element={<Navigate to="/venta/nueva" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="venta">
-            <Route path="nueva" element={<NuevaVenta />} />
-            <Route path="lista" element={<ListaVentas />} />
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<PublicLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="login" element={<LoginScreen />} />
           </Route>
-          <Route path="inventario">
-            <Route path="productos" element={<ListaProductos />} />
+
+          {/* Admin Routes */}
+          <Route
+            path="/admin"
+            element={
+              <PrivateRoute>
+                <AdminLayout />
+              </PrivateRoute>
+            }
+          >
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="ventas">
+              <Route index element={<ListaVentas />} />
+              <Route path="nueva" element={<NuevaVenta />} />
+            </Route>
+            <Route path="inventario" element={<ListaProductos />} />
+            <Route path="clientes" element={<ListaClientes />} />
           </Route>
-          <Route path="clientes" element={<ListaClientes />} />
-        </Route>
-      </Routes>
-    </Router>
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
-};
+}
 
 export default App;
